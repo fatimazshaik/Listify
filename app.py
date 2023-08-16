@@ -1,11 +1,10 @@
 import os
 from flask import Flask, request, render_template
 from datetime import date
-import time
 import json
 import swagger_client
 from swagger_client.rest import ApiException
-from pprint import pprint
+import requests
 
 #Defining App
 app = Flask(__name__)
@@ -15,8 +14,8 @@ configuration = swagger_client.Configuration()
 configuration.api_key['key'] = 'b527da88f72a457baaf22901231308'
 
 api_instance = swagger_client.APIsApi(swagger_client.ApiClient(configuration))
-q = 'Lima'
-lang = 'lang_example'
+q = 'Paris'
+lang = 'English'
 
 todayDateV1 = date.today().strftime("%m_%d_%y")
 todayDateV2 = date.today().strftime("%d-%B-%Y")
@@ -26,8 +25,29 @@ if 'tasks.txt' not in os.listdir('.'):
     with open('tasks.txt', 'w') as f:
         f.write('')
 
+#Grabs Location using API:
+def get_ip():
+    response = requests.get('https://api64.ipify.org?format=json').json()
+    return response["ip"]
+
+
+def get_location():
+    ip_address = get_ip()
+    response = requests.get(f'https://ipapi.co/{ip_address}/json/').json()
+    location_data = {
+        "ip": ip_address,
+        "city": response.get("city"),
+        "region": response.get("region"),
+        "country": response.get("country_name")
+    }
+    return location_data
+
 #Grabs Weather Data From API
 def getWeatherData():
+    locationData = get_location()
+    city = locationData["city"]
+    #change to equal city l8r
+    q = "Fremont"
     try:
         # Realtime API
         api_response = api_instance.realtime_weather(q, lang=lang)
@@ -74,30 +94,34 @@ def index():
 @app.route('/clear') #Route to clear entire list
 def clear_list():
     newTaskList()
-    return render_template('home.html', datetoday2=todayDateV2, tasklist=getTaskList(), l=len(getTaskList()))
+    weatherTemp, weatherText, weatherIcon = getWeatherData()
+    return render_template('home.html', datetoday2=todayDateV2, tasklist=getTaskList(), l=len(getTaskList()), weatherIcon=weatherIcon, weatherText=weatherText, weatherTemp = weatherTemp)
 
 
 @app.route('/addtask', methods=['POST']) #Route to add item to list
 def add_task():
     task = request.form.get('newtask')
+    weatherTemp, weatherText, weatherIcon = getWeatherData()
     with open('tasks.txt', 'a') as f:
         f.writelines(task + '\n')
-    return render_template('home.html', datetoday2=todayDateV2, tasklist=getTaskList(), l=len(getTaskList()))
+    return render_template('home.html', datetoday2=todayDateV2, tasklist=getTaskList(), l=len(getTaskList()),
+                           weatherIcon=weatherIcon, weatherText=weatherText, weatherTemp=weatherTemp)
 
 
 @app.route('/deltask', methods=['GET']) #Route to delete specific item of list
 def remove_task():
+    weatherTemp, weatherText, weatherIcon = getWeatherData()
     task_index = int(request.args.get('deltaskid'))
     tasklist = getTaskList()
     print(task_index)
     print(tasklist)
     if task_index < 0 or task_index > len(tasklist):
         return render_template('home.html', datetoday2=todayDateV2, tasklist=tasklist, l=len(tasklist),
-                               mess='Invalid Index...')
+                               mess='Invalid Index...',weatherIcon=weatherIcon, weatherText=weatherText, weatherTemp=weatherTemp)
     else:
         removed_task = tasklist.pop(task_index)
     updateTaskList(tasklist)
-    return render_template('home.html', datetoday2=todayDateV2, tasklist=tasklist, l=len(tasklist))
+    return render_template('home.html', datetoday2=todayDateV2, tasklist=tasklist, l=len(tasklist), weatherIcon=weatherIcon, weatherText=weatherText, weatherTemp=weatherTemp)
 
 
 #Run App
